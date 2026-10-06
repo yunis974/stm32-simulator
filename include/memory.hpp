@@ -15,5 +15,5 @@ public:
     bool write16(std::uint32_t address, std::uint16_t value);
     bool write32(std::uint32_t address, std::uint32_t value);
 private:
-    std::uint8_t memory[65536]; // 64KB of memory
+    std::uint8_t memory[65536] = {0}; // 64KB of memory filled with zeros
 };

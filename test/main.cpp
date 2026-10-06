@@ -1,22 +1,87 @@
-#include "memory.hpp"
 #include "cpu.hpp"
-#include <bitset>
+#include "memory.hpp"
+#include <iostream>
+#include <iomanip>
 
-int main(void)
+void printResult(CPU& cpu)
 {
-Memory memory;
-memory.write16(0x0000, 0x2301);
-memory.write16(0x0002, 0x2401);
-memory.write16(0x0004, 0x191D);
-CPU cpu(&memory);
-cpu.setPC(0x0000);
+    std::cout << "R0 = 0x"
+              << std::hex
+              << std::setw(8)
+              << std::setfill('0')
+              << cpu.getRegisterValue(0)
+              << std::dec
+              << '\n';
 
-cpu.decodeInstruction(cpu.fetch());
-cpu.decodeInstruction(cpu.fetch());
-cpu.decodeInstruction(cpu.fetch());
+    std::cout << "N = " << cpu.getFlagN() << '\n';
+    std::cout << "Z = " << cpu.getFlagZ() << '\n';
+    std::cout << "C = " << cpu.getFlagC() << '\n';
+    std::cout << "V = " << cpu.getFlagV() << '\n';
 
-std::cout << "register 3: " << cpu.getRegisterValue(3) << '\n';
-std::cout << "register 4: " << cpu.getRegisterValue(4) << '\n';
-std::cout << "register 5: " << cpu.getRegisterValue(5) << '\n';
-return 0;
+    std::cout << "--------------------\n";
+}
+
+int main()
+{
+    Memory memory;
+    CPU cpu(&memory);
+
+    // ADD R0, R1, R2
+    std::uint16_t instruction = 0x1888;
+
+    // TEST 1
+    std::cout << "===== TEST 1 : 5 + 3 =====\n";
+
+    cpu.setRegisterValue(1, 5);
+    cpu.setRegisterValue(2, 3);
+
+    cpu.decodeInstruction(instruction);
+
+    printResult(cpu);
+
+
+    // TEST 2
+    std::cout << "===== TEST 2 : 0 + 0 =====\n";
+
+    cpu.setRegisterValue(1, 0);
+    cpu.setRegisterValue(2, 0);
+
+    cpu.decodeInstruction(instruction);
+
+    printResult(cpu);
+
+
+    // TEST 3
+    std::cout << "===== TEST 3 : 0xFFFFFFFF + 1 =====\n";
+
+    cpu.setRegisterValue(1, 0xFFFFFFFF);
+    cpu.setRegisterValue(2, 1);
+
+    cpu.decodeInstruction(instruction);
+
+    printResult(cpu);
+
+
+    // TEST 4
+    std::cout << "===== TEST 4 : 0x7FFFFFFF + 1 =====\n";
+
+    cpu.setRegisterValue(1, 0x7FFFFFFF);
+    cpu.setRegisterValue(2, 1);
+
+    cpu.decodeInstruction(instruction);
+
+    printResult(cpu);
+
+
+    // TEST 5
+    std::cout << "===== TEST 5 : 0x80000000 + 0xFFFFFFFF =====\n";
+
+    cpu.setRegisterValue(1, 0x80000000);
+    cpu.setRegisterValue(2, 0xFFFFFFFF);
+
+    cpu.decodeInstruction(instruction);
+
+    printResult(cpu);
+
+    return 0;
 }
