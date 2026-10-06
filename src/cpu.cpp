@@ -80,6 +80,10 @@ void CPU::executeMovs(std::uint16_t instruction)
     std::uint8_t imm8 = instruction & 0x00FF; // Extract immediate value (imm8)
 
     registers[rd] = imm8; // Move the immediate value into the destination register
+    std::uint32_t result = imm8;
+
+    setFlagN(result & (1u << 31));
+    setFlagZ(result == 0);
 }
 
 std::uint32_t CPU::getRegisterValue(std::uint8_t index)
@@ -130,8 +134,25 @@ void CPU::executeSub(std::uint16_t instruction)
     std::uint8_t rm = (instruction & 0x01C0) >> 6; // Extract source register (Rm)
     std::uint8_t rn = (instruction & 0x0038) >> 3; // Extract first operand register (Rn)
     std::uint8_t rd = instruction & 0x0007; // Extract destination register (Rd)
+    std::uint32_t result = registers[rn] - registers[rm]; // Perform subtraction
+    registers[rd] = result; // Store the result in the destination register
 
-    registers[rd] = registers[rn] - registers[rm]; // Perform subtraction and store the result in Rd
+    setFlagN(result & (1u << 31)); // Set N flag if the result is negative
+    setFlagZ(result == 0); // Set Z flag if the result is zero
+    setFlagC(registers[rn] >= registers[rm]); // Set C flag if there was no borrow (Rn >= Rm)
+
+    bool signRn = registers[rn] & (1u << 31);
+    bool signRm = registers[rm] & (1u << 31);
+    bool signResult = result & (1u << 31);
+
+    /* 
+    note: The V flag is set if the signs of the operands are different 
+    and the sign of the result is different from the sign of Rn.
+    This indicates that an overflow occurred during the subtraction.
+    */
+    setFlagV((signRn != signRm) && (signRn != signResult)); // Set V flag if there was an overflow
+
+
 }
 
 bool CPU::getFlagN() const
@@ -162,7 +183,7 @@ void CPU::setFlagN(bool value)
     }
     else
     {
-        APSR &= ~(1 << 31); // Clear the N flag (bit 31) in the APSR register
+        APSR &= ~(1u << 31); // Clear the N flag (bit 31) in the APSR register
     }
 }
 

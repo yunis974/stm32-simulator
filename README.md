@@ -53,8 +53,11 @@ The simulator currently contains:
 * Pointer-to-member-function instruction dispatch
 * `MOVS` instruction
 * `ADDS` instruction with condition flag updates
+* `SUBS` instruction with condition flag updates
 
-For example, the simulator can currently execute a sequence equivalent to:
+The implemented arithmetic instructions currently support the ARM condition flags required for their respective operations.
+
+For example, the simulator can execute a sequence equivalent to:
 
 ```asm
 MOVS R3, #1
@@ -75,6 +78,10 @@ C = 0
 V = 0
 ```
 
+`MOVS` correctly updates `N` and `Z` while preserving `C` and `V`.
+
+`ADDS` and `SUBS` calculate `N`, `Z`, `C`, and `V` according to the result of the arithmetic operation.
+
 This is only the beginning of the Cortex-M3 instruction set.
 
 ## 🚩 CPU Status Flags
@@ -93,12 +100,38 @@ The flags are stored in a simulated 32-bit APSR using their ARM-defined bit posi
  N     Z     C     V
 ```
 
-The simulator currently calculates these flags for `ADDS`.
+### MOVS
+
+`MOVS` updates:
+
+* `N`
+* `Z`
+
+while preserving:
+
+* `C`
+* `V`
+
+For example:
+
+```text
+MOVS R0, #0
+
+N = 0
+Z = 1
+C = unchanged
+V = unchanged
+```
+
+### ADDS
+
+`ADDS` updates all four flags.
 
 For example:
 
 ```text
 0xFFFFFFFF + 1
+
 → Result: 0x00000000
 → N = 0
 → Z = 1
@@ -110,6 +143,7 @@ and:
 
 ```text
 0x7FFFFFFF + 1
+
 → Result: 0x80000000
 → N = 1
 → Z = 0
@@ -117,7 +151,49 @@ and:
 → V = 1
 ```
 
-This provides the foundation for future instructions such as comparisons and conditional branches.
+### SUBS
+
+`SUBS` also updates all four flags.
+
+For example:
+
+```text
+5 - 3
+
+→ Result: 0x00000002
+→ N = 0
+→ Z = 0
+→ C = 1
+→ V = 0
+```
+
+When subtracting, the `C` flag indicates that no borrow was required.
+
+For example:
+
+```text
+3 - 5
+
+→ Result: 0xFFFFFFFE
+→ N = 1
+→ Z = 0
+→ C = 0
+→ V = 0
+```
+
+The simulator also correctly handles signed overflow:
+
+```text
+0x80000000 - 1
+
+→ Result: 0x7FFFFFFF
+→ N = 0
+→ Z = 0
+→ C = 1
+→ V = 1
+```
+
+These flags provide the foundation for future instructions such as comparisons and conditional branches.
 
 ## 🏗️ Planned Architecture
 
@@ -125,11 +201,17 @@ The simulator will progressively be built around several layers:
 
 ```text
                     Firmware
+
                        │
+
                        ▼
+
               ARM/Thumb machine code
+
                        │
+
                        ▼
+
               ┌─────────────────┐
               │   Cortex-M3     │
               │      CPU        │
@@ -207,10 +289,12 @@ The simulator itself does not rely on STM32 HAL or CubeMX. The intention is to r
 * [x] 16-bit Thumb instruction decoding
 * [x] Table-based instruction decoder
 * [x] `MOVS`
+* [x] `MOVS` N/Z flag updates
 * [x] `ADDS`
 * [x] `ADDS` N/Z/C/V flag updates
-* [ ] `MOVS` N/Z flag updates
-* [ ] `SUBS` N/Z/C/V flag updates
+* [x] `SUBS`
+* [x] `SUBS` N/Z/C/V flag updates
+* [ ] `CMP`
 * [ ] More Thumb instructions
 * [ ] Thumb-2 32-bit instructions
 * [ ] Branch instructions
@@ -260,15 +344,25 @@ Instead of treating the STM32 as a black box, the goal is to understand what hap
 
 ```text
 C / C++ firmware
+
        ↓
+
 arm-none-eabi-gcc
+
        ↓
+
 ARM/Thumb machine code
+
        ↓
+
 Cortex-M3 CPU
+
        ↓
+
 Memory + Peripherals
+
        ↓
+
 Physical hardware
 ```
 
@@ -297,9 +391,8 @@ You will need:
 ### Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/stm32simulator.git
-
-cd stm32simulator
+git clone https://github.com/yunis974/stm32-simulator.git
+cd stm32-simulator
 ```
 
 ### Build
@@ -325,9 +418,9 @@ Run it with:
 
 ### Testing the CPU
 
-The current `test/main.cpp` contains a small program loaded directly into the simulated memory.
+The current `test/main.cpp` contains small programs that directly exercise the CPU instruction handlers.
 
-For example, the current test executes:
+For example:
 
 ```asm
 MOVS R3, #1
@@ -335,7 +428,7 @@ MOVS R4, #1
 ADDS R5, R3, R4
 ```
 
-The instructions are manually written into simulated memory:
+The instructions can be written directly into simulated memory:
 
 ```cpp
 memory.write16(0x0000, 0x2301);
@@ -353,26 +446,17 @@ cpu.setPC(0x0000);
 cpu.decodeInstruction(cpu.fetch());
 cpu.decodeInstruction(cpu.fetch());
 cpu.decodeInstruction(cpu.fetch());
-
-std::cout << cpu.getRegisterValue(5) << '\n';
 ```
 
-The expected output is:
+The expected result is:
 
 ```text
-2
+R5 = 2
 ```
 
-For the `ADDS` instruction, the simulator also updates the APSR condition flags:
+The arithmetic instructions also update the APSR flags.
 
-```text
-N = 0
-Z = 0
-C = 0
-V = 0
-```
-
-This test demonstrates the current execution pipeline:
+The current execution pipeline is:
 
 ```text
 Memory
@@ -388,7 +472,7 @@ CPU Registers
 APSR Flags
 ```
 
-As more instructions are implemented, the test program will progressively be replaced by actual ARM/Thumb machine code generated from compiled firmware.
+As more instructions are implemented, the test programs will progressively be replaced by actual ARM/Thumb machine code generated from compiled firmware.
 
 ## 📄 License
 
@@ -397,5 +481,3 @@ This project is licensed under the **MIT License**.
 You are free to use, modify, copy, and distribute this software, including for commercial purposes, provided that the original copyright notice and license are included with the software.
 
 See the [`LICENSE`](LICENSE) file for the full license text.
-
-# stm32-simulator
