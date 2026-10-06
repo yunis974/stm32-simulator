@@ -45,12 +45,14 @@ The simulator currently contains:
 * A basic memory implementation
 * A basic Cortex-M3 CPU structure
 * Program counter and instruction fetching
+* Basic register manipulation
+* A simulated 32-bit APSR
+* ARM condition flags (`N`, `Z`, `C`, `V`)
 * 16-bit Thumb instruction decoding
 * A table-based instruction decoder
 * Pointer-to-member-function instruction dispatch
-* Basic register manipulation
 * `MOVS` instruction
-* `ADDS`  instruction
+* `ADDS` instruction with condition flag updates
 
 For example, the simulator can currently execute a sequence equivalent to:
 
@@ -66,9 +68,56 @@ and produce:
 R3 = 1
 R4 = 1
 R5 = 2
+
+N = 0
+Z = 0
+C = 0
+V = 0
 ```
 
 This is only the beginning of the Cortex-M3 instruction set.
+
+## 🚩 CPU Status Flags
+
+The simulator currently implements the four main condition flags of the ARM APSR:
+
+* `N` — Negative
+* `Z` — Zero
+* `C` — Carry
+* `V` — Overflow
+
+The flags are stored in a simulated 32-bit APSR using their ARM-defined bit positions:
+
+```text
+31    30    29    28
+ N     Z     C     V
+```
+
+The simulator currently calculates these flags for `ADDS`.
+
+For example:
+
+```text
+0xFFFFFFFF + 1
+→ Result: 0x00000000
+→ N = 0
+→ Z = 1
+→ C = 1
+→ V = 0
+```
+
+and:
+
+```text
+0x7FFFFFFF + 1
+→ Result: 0x80000000
+→ N = 1
+→ Z = 0
+→ C = 0
+→ V = 1
+```
+
+This provides the foundation for future instructions such as comparisons and conditional branches.
 
 ## 🏗️ Planned Architecture
 
@@ -153,10 +202,15 @@ The simulator itself does not rely on STM32 HAL or CubeMX. The intention is to r
 * [x] Program counter
 * [x] Instruction fetching
 * [x] Basic register system
+* [x] Simulated APSR
+* [x] `N`, `Z`, `C`, `V` condition flags
 * [x] 16-bit Thumb instruction decoding
 * [x] Table-based instruction decoder
 * [x] `MOVS`
 * [x] `ADDS`
+* [x] `ADDS` N/Z/C/V flag updates
+* [ ] `MOVS` N/Z flag updates
+* [ ] `SUBS` N/Z/C/V flag updates
 * [ ] More Thumb instructions
 * [ ] Thumb-2 32-bit instructions
 * [ ] Branch instructions
@@ -244,6 +298,7 @@ You will need:
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/stm32simulator.git
+
 cd stm32simulator
 ```
 
@@ -308,6 +363,15 @@ The expected output is:
 2
 ```
 
+For the `ADDS` instruction, the simulator also updates the APSR condition flags:
+
+```text
+N = 0
+Z = 0
+C = 0
+V = 0
+```
+
 This test demonstrates the current execution pipeline:
 
 ```text
@@ -320,10 +384,11 @@ Instruction Decode
 Instruction Handler
    ↓
 CPU Registers
+   ↓
+APSR Flags
 ```
 
 As more instructions are implemented, the test program will progressively be replaced by actual ARM/Thumb machine code generated from compiled firmware.
-
 
 ## 📄 License
 
@@ -332,4 +397,5 @@ This project is licensed under the **MIT License**.
 You are free to use, modify, copy, and distribute this software, including for commercial purposes, provided that the original copyright notice and license are included with the software.
 
 See the [`LICENSE`](LICENSE) file for the full license text.
+
 # stm32-simulator
