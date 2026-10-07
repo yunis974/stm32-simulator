@@ -54,33 +54,36 @@ The simulator currently contains:
 * `MOVS` instruction
 * `ADDS` instruction with condition flag updates
 * `SUBS` instruction with condition flag updates
+* `CMP` instruction with condition flag updates
+* `BEQ` conditional branch
+* `BNE` conditional branch
 
-The implemented arithmetic instructions currently support the ARM condition flags required for their respective operations.
+The simulator can currently execute small sequences of Thumb instructions involving arithmetic, comparisons and conditional branches.
 
-For example, the simulator can execute a sequence equivalent to:
+For example:
 
 ```asm
-MOVS R3, #1
-MOVS R4, #1
-ADDS R5, R3, R4
+MOVS R1, #5
+MOVS R2, #3
+CMP  R1, R2
+BNE  target
 ```
 
-and produce:
+The CPU correctly updates the condition flags during arithmetic and comparison operations, and conditional branches use the `Z` flag to determine whether the branch is taken.
+
+The current instruction execution pipeline is:
 
 ```text
-R3 = 1
-R4 = 1
-R5 = 2
-
-N = 0
-Z = 0
-C = 0
-V = 0
+Memory
+   ↓
+Fetch
+   ↓
+Instruction Decode
+   ↓
+Instruction Handler
+   ↓
+CPU Registers / APSR
 ```
-
-`MOVS` correctly updates `N` and `Z` while preserving `C` and `V`.
-
-`ADDS` and `SUBS` calculate `N`, `Z`, `C`, and `V` according to the result of the arithmetic operation.
 
 This is only the beginning of the Cortex-M3 instruction set.
 
@@ -193,7 +196,56 @@ The simulator also correctly handles signed overflow:
 → V = 1
 ```
 
-These flags provide the foundation for future instructions such as comparisons and conditional branches.
+### CMP
+
+`CMP` performs a subtraction between two registers:
+
+```text
+CMP Rn, Rm
+```
+
+It updates:
+
+* `N`
+* `Z`
+* `C`
+* `V`
+
+but does **not** store the subtraction result in a register.
+
+For example:
+
+```text
+R1 = 5
+R2 = 3
+
+CMP R1, R2
+
+→ Z = 0
+→ C = 1
+→ N = 0
+→ V = 0
+```
+
+The result of the comparison can then be used by conditional branch instructions.
+
+### Conditional Branches
+
+The simulator currently implements:
+
+* `BEQ` — Branch if Equal (`Z = 1`)
+* `BNE` — Branch if Not Equal (`Z = 0`)
+
+For example:
+
+```asm
+CMP R1, R2
+BNE not_equal
+```
+
+The branch is taken when the `Z` flag is clear.
+
+These instructions provide the foundation for implementing loops, conditionals and more complex control flow.
 
 ## 🏗️ Planned Architecture
 
@@ -294,10 +346,13 @@ The simulator itself does not rely on STM32 HAL or CubeMX. The intention is to r
 * [x] `ADDS` N/Z/C/V flag updates
 * [x] `SUBS`
 * [x] `SUBS` N/Z/C/V flag updates
-* [ ] `CMP`
+* [x] `CMP`
+* [x] `CMP` N/Z/C/V flag updates
+* [x] `BEQ`
+* [x] `BNE`
 * [ ] More Thumb instructions
+* [ ] Unconditional `B`
 * [ ] Thumb-2 32-bit instructions
-* [ ] Branch instructions
 * [ ] Stack operations
 * [ ] Exceptions
 * [ ] Interrupt handling
@@ -392,6 +447,7 @@ You will need:
 
 ```bash
 git clone https://github.com/yunis974/stm32-simulator.git
+
 cd stm32-simulator
 ```
 
@@ -401,6 +457,7 @@ The project uses CMake with an out-of-source build directory:
 
 ```bash
 cmake -S . -B build
+
 cmake --build build
 ```
 
@@ -423,17 +480,19 @@ The current `test/main.cpp` contains small programs that directly exercise the C
 For example:
 
 ```asm
-MOVS R3, #1
-MOVS R4, #1
-ADDS R5, R3, R4
+MOVS R1, #5
+MOVS R2, #3
+CMP  R1, R2
+BNE  not_equal
 ```
 
 The instructions can be written directly into simulated memory:
 
 ```cpp
-memory.write16(0x0000, 0x2301);
-memory.write16(0x0002, 0x2401);
-memory.write16(0x0004, 0x191D);
+memory.write16(0x0000, 0x2105); // MOVS R1, #5
+memory.write16(0x0002, 0x2203); // MOVS R2, #3
+memory.write16(0x0004, 0x4291); // CMP R1, R2
+memory.write16(0x0006, 0xD100); // BNE
 ```
 
 The CPU then fetches and executes them sequentially:
@@ -446,38 +505,43 @@ cpu.setPC(0x0000);
 cpu.decodeInstruction(cpu.fetch());
 cpu.decodeInstruction(cpu.fetch());
 cpu.decodeInstruction(cpu.fetch());
+cpu.decodeInstruction(cpu.fetch());
 ```
 
-The expected result is:
+The comparison updates the APSR flags and the `BNE` instruction uses the `Z` flag to determine whether the branch is taken.
 
-```text
-R5 = 2
-```
-
-The arithmetic instructions also update the APSR flags.
+As more instructions are implemented, these small test programs will progressively be replaced by actual ARM/Thumb machine code generated from compiled firmware.
 
 The current execution pipeline is:
 
 ```text
 Memory
+
    ↓
+
 Fetch
+
    ↓
+
 Instruction Decode
+
    ↓
+
 Instruction Handler
+
    ↓
+
 CPU Registers
+
    ↓
+
 APSR Flags
 ```
-
-As more instructions are implemented, the test programs will progressively be replaced by actual ARM/Thumb machine code generated from compiled firmware.
 
 ## 📄 License
 
 This project is licensed under the **MIT License**.
 
-You are free to use, modify, copy, and distribute this software, including for commercial purposes, provided that the original copyright notice and license are included with the software.
+You are free to use, modify, copy and distribute this software, including for commercial purposes, provided that the original copyright notice and license are included with the software.
 
 See the [`LICENSE`](LICENSE) file for the full license text.

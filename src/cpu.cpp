@@ -6,7 +6,10 @@ CPU::CPU(Memory* mem)
     instructions = {
         {0xF800, 0x2000, &CPU::executeMovs}, // MOVS instruction encoding
         {0xFE00, 0x1800, &CPU::executeAdd},   // ADD instruction encoding
-        {0xFE00, 0x1A00, &CPU::executeSub}    // SUB instruction encoding
+        {0xFE00, 0x1A00, &CPU::executeSub},    // SUB instruction encoding
+        {0xFFC0, 0x4280, &CPU::executeCmp},     // CMP instruction encoding
+        {0xFF00, 0xD000, &CPU::executeBeq},     // BEQ instruction encoding
+        {0xFF00, 0xD100, &CPU::executeBne}      // BNE instruction encoding
     };
 
 }
@@ -232,5 +235,65 @@ void CPU::setRegisterValue(std::uint8_t index, std::uint32_t value)
     else
     {
         std::cerr << "Invalid register index: " << static_cast<int>(index) << std::endl;
+    }
+}
+
+void CPU::executeCmp(std::uint16_t instruction)
+{
+    std::uint8_t rm = (instruction & 0x0078) >> 3; // Extract source register (Rm)
+    std::uint8_t rn = instruction & 0x0007 ; // Extract first operand register (Rn)
+
+    std::uint32_t result = registers[rn] - registers[rm]; // Perform subtraction
+
+    setFlagN(result & (1u << 31)); // Set N flag if the result is negative
+    setFlagZ(result == 0); // Set Z flag if the result is zero
+    setFlagC(registers[rn] >= registers[rm]); // Set C flag if there was no borrow (Rn >= Rm)
+
+    bool signRn = registers[rn] & (1u << 31);
+    bool signRm = registers[rm] & (1u << 31);
+    bool signResult = result & (1u << 31);
+
+    /* 
+    note: The V flag is set if the signs of the operands are different 
+    and the sign of the result is different from the sign of Rn.
+    This indicates that an overflow occurred during the subtraction.
+    */
+    setFlagV((signRn != signRm) && (signRn != signResult)); // Set V flag if there was an overflow
+
+}
+
+void CPU::executeBeq(std::uint16_t instruction)
+{
+    std::uint8_t imm8 = instruction & 0x00FF; // Extract the immediate value (imm8)
+
+    std::int16_t offset = static_cast<std::int16_t>(imm8 << 1); // Shift left by 1 to get the actual offset
+
+    if (imm8 & 0x80) // Check if the sign bit is set (negative offset)
+    {
+        offset |= 0xFF00; // Sign-extend the offset to 16 bits
+    }
+
+
+    if(getFlagZ()) // Check if the Z flag is set (indicating equality)
+    {
+        setPC(getPC() + 2 + offset); // Update the PC with the new address
+    }
+
+}
+
+void CPU::executeBne(std::uint16_t instruction)
+{
+    std::uint8_t imm8 = instruction & 0x00FF; // Extract the immediate value (imm8)
+
+    std::int16_t offset = static_cast<std::int16_t>(imm8 << 1); // Shift left by 1 to get the actual offset
+
+    if (imm8 & 0x80) // Check if the sign bit is set (negative offset)
+    {
+        offset |= 0xFF00; // Sign-extend the offset to 16 bits
+    }
+
+    if(!getFlagZ()) // Check if the Z flag is NOT set (indicating inequality)
+    {
+        setPC(getPC() + 2 + offset); // Update the PC with the new address
     }
 }

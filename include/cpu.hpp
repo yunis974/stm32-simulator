@@ -32,10 +32,14 @@ public:
     
     std::uint32_t getRegisterValue(std::uint8_t index);
     void setRegisterValue(std::uint8_t index, std::uint32_t value);
-    // instruction functions
+    // instruction16 functions
     void executeMovs(std::uint16_t instruction);
     void executeAdd(std::uint16_t instruction);
     void executeSub(std::uint16_t instruction);
+
+    void executeCmp(std::uint16_t instruction);
+    void executeBeq(std::uint16_t instruction); 
+    void executeBne(std::uint16_t instruction);
 
     //flags getter
     bool getFlagN() const;
